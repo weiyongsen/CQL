@@ -1,25 +1,25 @@
-import gym
 import ray
 import ray.rllib.algorithms.cql as cql
+from ray.tune.logger import pretty_print
 
 ray.init(ignore_reinit_error=True)
+
+# 配置CQL算法
 config = cql.DEFAULT_CONFIG.copy()
-config["num_gpus"] = 0
 config["num_workers"] = 1
 config["framework"] = "torch"
+config["input"] = "data_collect"  # 使用您生成的数据
+
+# 创建CQL算法实例
 algo = cql.CQL(config=config, env="Pendulum-v1")
 
-# 加载之前保存的checkpoint（请将此路径替换为实际的checkpoint路径）
-checkpoint_path = "save_model/your_checkpoint_directory_or_file"  
-algo.restore(checkpoint_path)
+# 训练循环
+for i in range(100):
+    result = algo.train()
+    print(pretty_print(result))
 
-# 使用加载的模型在环境中进行测试
-env = gym.make("Pendulum-v1")
-obs = env.reset()
-done = False
-while not done:
-    action = algo.compute_action(obs)
-    obs, reward, done, info = env.step(action)
-    env.render()
+    if i % 10 == 0:
+        checkpoint = algo.save("save_model")
+        print("checkpoint saved at", checkpoint)
 
 ray.shutdown()

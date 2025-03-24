@@ -10,13 +10,12 @@ from ray.rllib.offline.json_writer import JsonWriter
 
 if __name__ == "__main__":
     batch_builder = SampleBatchBuilder()  # or MultiAgentSampleBatchBuilder
-    writer = JsonWriter(
-        os.path.join(ray._private.utils.get_user_temp_dir(), "demo-out")
-    )
+    writer = JsonWriter('data_collect')
+
 
     # You normally wouldn't want to manually create sample batches if a
     # simulator is available, but let's do it anyways for example purposes:
-    env = gym.make("CartPole-v0")
+    env = gym.make("Pendulum-v1")
 
     # RLlib uses preprocessors to implement transforms such as one-hot encoding
     # and flattening of tuple and dict observations. For CartPole a no-op
@@ -32,7 +31,9 @@ if __name__ == "__main__":
         t = 0
         while not done:
             action = env.action_space.sample()
-            new_obs, rew, done, truncated,  info = env.step(action)
+            # new_obs, rew, done, truncated, info = env.step(action)
+            new_obs, rew, done, info = env.step(action)
+            # print(new_obs, rew, done, info)
             batch_builder.add_values(
                 t=t,
                 eps_id=eps_id,
