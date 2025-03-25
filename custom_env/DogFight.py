@@ -420,7 +420,7 @@ class Base_env(base_class):
             self.w_list.append(w)
             self.obs_list_episode.append(obs_list)
 
-        return obs_list, reward, done, completion_degree
+        return obs_list + action_new, reward, done, completion_degree
 
     def change_target(self, h_setpoint, psi_setpoint):
         if self.mode == 'test':
