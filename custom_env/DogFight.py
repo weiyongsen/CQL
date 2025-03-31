@@ -41,7 +41,7 @@ class Base_env(base_class):
                         1-切换 (Switch)
             }
         }
-        ‘blue':{
+        'blue':{
             'blue_0':{
                 与上述格式相同 The same as above
             }
@@ -103,50 +103,46 @@ class Base_env(base_class):
         :param render: 是否可视化
         :param excute_path: 主要是根据软件位置的不同
         """
-        ip = '127.0.0.1'
-        port = 8000
-        excute_path = r'C:\Users\Absol\Desktop\ZK\ZK_v2.6\build\windows\ZK.exe'
-        # excute_path = 'game/nolinux/ZK.x86_64'
-        # 更改飞机数量，原为3
-        red_num = 1
-        blue_num = 1
-        scenes = 3
-        mode = 'train'
-        step_num_max = 300
+        # 默认配置参数
+        default_config = {
+            'ip': '127.0.0.1',
+            'port': 8000,
+            'red_num': 1,
+            'blue_num': 1,
+            'state_size': 20,
+            'action_size': 4,
+            'scenes': 3,
+            'mode': 'train',
+            'step_num_max': 300,
+            'excute_path': r'C:\Users\Absol\Desktop\ZK\ZK_v2.6\build\windows\ZK.exe',
+            'render': render
+        }
 
+        # 更新配置参数
         if config is not None:
-            ip = config.get('ip', ip)
-            port = config.get('port', port)
-            red_num = config.get('red_num', red_num)
-            blue_num = config.get('blue_num', blue_num)
-            scenes = config.get('scenes', scenes)
-            excute_path = config.get('excute_path', excute_path)
-            render = config.get('render', render)
-            step_num_max = config.get('step_num_max', step_num_max)
-            mode = config.get('mode', mode)
-        try:
-            port = config.worker_index + port
-        except:
-            port = port
-        self.IP = ip
-        self.PORT = port
-        self.RENDER = int(render)
-        self.red_num = red_num
-        self.blue_num = blue_num
-        self.scenes = scenes
-        self.excute_path = excute_path
-        self.mode = mode
-        self.step_num_max = step_num_max
-        self.data = None  # set for debug
+            # 使用字典的get方法更新配置，如果config中没有对应的键，则使用默认值
+            for key in default_config:
+                default_config[key] = config.get(key, default_config[key])
+            
+            # 处理worker_index
+            try:
+                default_config['port'] += config.worker_index
+            except:
+                pass
+
+        # 将配置参数赋值给实例变量
+        for key, value in default_config.items():
+            setattr(self, key.upper() if key in ['ip', 'port', 'render'] else key, value)
+
+        # 初始化其他变量
+        self.data = None  # 用于调试
         self.INITIAL = False
-        self.excute_cmd = f'{self.excute_path} ip={self.IP} port={self.PORT} ' \
-                          f'PlayMode={self.RENDER} ' \
-                          f'RedNum={self.red_num} BlueNum={self.blue_num} ' \
-                          f'Scenes={self.scenes}'
-        self.create_entity()
         self.obs_tot = None
 
-        # 添加数据， 高度, 航向, 速度任务值, 需要在reset中修改
+        # 创建环境实体
+        self.create_entity()
+
+        # 添加数据，高度, 航向, 速度任务值，需要在reset中修改
         self.h_initial = 5000  # 初始高度
         self.h_setpoint = 8000  # 目标高度
         self.psi_initial = 90
@@ -164,19 +160,19 @@ class Base_env(base_class):
         self.last_action_input = np.zeros(4)
         self.obs_list_episode = []
         self.w_list = []
-
         self.prev_action_list = []
         self.process_action_list = []
+
+    def _build_execute_cmd(self):
+        """构建执行命令"""
+        return f'''{self.excute_path} Ip={self.IP} Port={self.PORT} PlayMode={self.RENDER} RedNum={self.red_num} BlueNum={self.blue_num} Scenes={self.scenes}'''
 
     # 创建游戏环境
     def create_entity(self):
         is_success = False
         while not is_success:
             try:
-                self.excute_cmd = f'{self.excute_path} Ip={self.IP} Port={self.PORT} ' \
-                                  f'PlayMode={self.RENDER} ' \
-                                  f'RedNum={self.red_num} BlueNum={self.blue_num} ' \
-                                  f'Scenes={self.scenes}'
+                self.excute_cmd = self._build_execute_cmd()
                 print('Creating Env', self.excute_cmd)
                 self.unity = os.popen(self.excute_cmd)
                 time.sleep(20)
@@ -295,7 +291,6 @@ class Base_env(base_class):
         self.step_num = 0
         self.w_list = []
 
-
         if self.mode == 'test':
             print(f'h_initial= {self.h_initial}, h_setpoint= {self.h_setpoint}')
             print(f'psi_initial= {self.psi_initial}, psi_setpoint= {self.psi_setpoint}')
@@ -317,7 +312,9 @@ class Base_env(base_class):
         self._send_condition(data)
         obs_tot = self._accept_from_socket()
         obs_list = obs_process(self.obs_dtol(obs_tot))
-        return obs_list
+        self.last_action = np.zeros(4)
+        # 将last_action作为观察的一部分返回
+        return np.concatenate([obs_list, self.last_action])
 
     def step(self, action_list, default_control=False):
         action_list = np.clip(action_list, -1, 1)
@@ -384,34 +381,6 @@ class Base_env(base_class):
             # print('v_reward', reward_v_linear, reward_v_scale)
             # print(f'w: {w}, reward: {reward}')
 
-        # 查看obs_list
-        # self.obs_list_episode.append(obs_list)
-        # if done:
-        #     self.obs_list_episode = np.array(self.obs_list_episode)
-        #     mean = np.mean(self.obs_list_episode, axis=0)
-        #     std = np.std(self.obs_list_episode, axis=0, ddof=0)
-        #     max_val = np.max(self.obs_list_episode, axis=0)
-        #     min_val = np.min(self.obs_list_episode, axis=0)
-        #     # 将统计数据存储到DataFrame中
-        #     stats_df = pd.DataFrame({
-        #         'Mean': mean,
-        #         'STD': std,
-        #         'Max': max_val,
-        #         'Min': min_val
-        #     })
-        #     # 转置数据，使得每列的统计值成为行
-        #     stats_df = stats_df.T  # 转置数据，行对应每个统计量
-        #
-        #     # 创建一个空行作为分隔
-        #     empty_row = pd.DataFrame([[None] * len(stats_df.columns)], columns=stats_df.columns)
-        #
-        #     # 合并数据和空行
-        #     stats_df = pd.concat([stats_df, empty_row], ignore_index=True)
-        #     stats_df.to_csv('obs_process.csv', mode='a', header=not pd.io.common.file_exists('obs_process.csv'), index=True)
-        #
-        #     # 清空obs_list_episode，准备下一轮
-        #     self.obs_list_episode = []
-
         # 测试模式下记录数据
         if self.mode == "test":
             self.h_list.append(obs_tot["red"]["red_0"]["position/h-sl-ft"])
@@ -420,7 +389,7 @@ class Base_env(base_class):
             self.w_list.append(w)
             self.obs_list_episode.append(obs_list)
 
-        return obs_list + action_new, reward, done, completion_degree
+        return np.concatenate([obs_list, self.last_action]), reward, done, completion_degree
 
     def change_target(self, h_setpoint, psi_setpoint):
         if self.mode == 'test':

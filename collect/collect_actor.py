@@ -1,60 +1,129 @@
+import os
+import sys
 import ray
-import gym
 import numpy as np
 from ray.rllib.evaluation.sample_batch_builder import SampleBatchBuilder
 from custom_env.DogFight import Base_env
+from Net.PPO import Actor
+import torch
 
 
-@ray.remote(num_cpus=1)
-class collect_actor():
-    def __init__(self, agent_id, env_config, is_collect=True):
+# 添加项目根目录到系统路径
+# project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+# sys.path.append(project_root)
+
+
+@ray.remote(num_cpus=1)  # 每个Actor分配1个CPU核心
+class CollectActor():
+    """
+    数据收集Actor类
+    负责与环境交互并收集轨迹数据
+    """
+    def __init__(self, agent_id, env_config, is_collect=True, sample_policy_path=None):
+        """
+        初始化Actor
+        Args:
+            agent_id: Actor的唯一标识符
+            env_config: 环境配置参数
+            is_collect: 是否收集数据
+            sample_policy_path: 预训练策略的路径
+        """
         self.is_collect = is_collect
         self.agent_id = agent_id
         self.env_config = env_config
-        obs_space = gym.spaces.Box(low=-10, high=10, shape=(20,))
-        action_space = gym.spaces.Box(-1, 1, shape=(4,))
 
-        self.batch_builder_singleagent = SampleBatchBuilder()
-        self.env = Base_env(config=env_config)
-
+        self.batch_builder_singleagent = SampleBatchBuilder()  # 用于构建轨迹批次
+        self.env = Base_env(env_config)  # 创建环境实例
+        self.mode = env_config['mode']
+        self.actor = Actor(env_config['state_size'], env_config['action_size'])  # 创建Actor网络
+        # 加载预训练策略
+        if sample_policy_path is not None:
+            self.actor.load_state_dict(torch.load(sample_policy_path))
 
     def collect_one_episode(self, eps_id):
-
-        obs = self.env.reset()
-        prev_action = np.zeros_like(self.action_space.sample())
-        prev_reward = 0
+        """
+        收集一个完整的轨迹
+        Args:
+            eps_id: 轨迹的唯一标识符
+        Returns:
+            dict: 包含轨迹数据和统计信息的字典
+            int: Actor的ID
+        """
+        # 重置环境，设置初始状态
+        obs = self.env.reset(h_initial=5000, h_setpoint=8000, psi_initial=90,
+                           psi_setpoint=200, v_initial=500, v_setpoint=600)
+        prev_action = np.zeros(4)  # 初始化前一个动作
+        prev_reward = 0  # 初始化前一个奖励
+        reward_total = 0  # 累计奖励
         done = False
-        t = 0
+        t = 0  # 时间步计数器
+
         while not done:
-            action = self.env.action_space.sample()
-            # info
-            new_obs, rew, done, info = self.env.step(action)
-            
+            # 使用Actor网络选择动作
+            action, action_log_prob = self.actor.sample_action(obs)
+            # 与环境交互
+            new_obs, reward, done, info = self.env.step(action)
+
             if self.is_collect:
+                # 计算动作概率密度值，用于重要性采样
+                action_prob = np.exp(action_log_prob)
+                # 将轨迹数据添加到批次构建器中
                 self.batch_builder_singleagent.add_values(
                     t=t,
                     eps_id=eps_id,
                     obs=obs,
                     actions=action,
-                    action_prob=1.0,  # put the true action probability here
-                    action_logp=0.0,
-                    rewards=rew,
+                    action_prob=action_prob,  # 用于CQL的重要性采样
+                    action_logp=action_log_prob,
+                    rewards=reward,
                     prev_actions=prev_action,
                     prev_rewards=prev_reward,
                     dones=done,
                     infos=info,
                     new_obs=obs,
                 )
+            # 更新状态
             obs = new_obs
             prev_action = action
-            prev_reward = rew
+            prev_reward = reward
+            reward_total += reward
             t += 1
 
-        self.env.close()
-        batch = self.batch_builder_multiagent.build_and_reset() if self.is_collect else None
+        self.env.close()  # 关闭环境
+        # 构建并重置批次
+        batch = self.batch_builder_singleagent.build_and_reset() if self.is_collect else None
         return {'batch': batch,
-                'reward': rew,
-                'count': t
+                'reward_total': reward_total,
+                'step': t
                 }, self.agent_id
 
 
+if __name__ == '__main__':
+    # 测试代码：使用单个worker测试数据收集功能
+    import json
+    from ray.rllib.offline.json_writer import JsonWriter
+    ray.init(local_mode=True)  # 本地模式初始化Ray
+    writer = JsonWriter("D:\Desktop\CQL\collect\csv", max_file_size=500 * 1024 * 1024)
+    # 创建测试Actor
+    actor = CollectActor.remote(agent_id=0,
+                              env_config={
+                                  'red_num': 1,
+                                  'blue_num': 1,
+                                  'state_size': 20,
+                                  'action_size': 4,
+                                  'render': 0,
+                                  'ip': '127.0.0.1',
+                                  'port': 8080,
+                                  'mode': 'collect',
+                                  'excute_path': r'D:\Desktop\project_competition\platform\MM\windows\ZK.exe',
+                                  'step_num_max': 300,
+                              },
+                              is_collect=True,
+                              sample_policy_path=r'D:\Desktop\CQL\sample_policy\model_train_0321_210028\actor30000_154.5482')
+    # 收集一条轨迹
+    results, agent_id = ray.get(actor.collect_one_episode.remote(0))
+
+    # 保存结果
+    writer.write(results['batch'])
+    print(results['reward_total'])
+    ray.kill(actor)  # 清理资源
