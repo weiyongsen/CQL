@@ -1,14 +1,8 @@
-import random
-import time
-
 import ray
-from ray.rllib.algorithms.sac.sac_torch_policy import SACTorchPolicy
 import gym
 import numpy as np
-from ray.rllib.evaluation.sample_batch_builder import SampleBatchBuilder, MultiAgentSampleBatchBuilder
-from ray.rllib.algorithms.callbacks import DefaultCallbacks
+from ray.rllib.evaluation.sample_batch_builder import SampleBatchBuilder
 from custom_env.DogFight import Base_env
-import math
 
 
 @ray.remote(num_cpus=1)
@@ -40,7 +34,6 @@ class collect_actor():
                 self.batch_builder_singleagent.add_values(
                     t=t,
                     eps_id=eps_id,
-                    agent_index=0,
                     obs=obs,
                     actions=action,
                     action_prob=1.0,  # put the true action probability here
