@@ -72,6 +72,20 @@ class Base_env(base_class):
             'blue_0': the same as above}
 
     """
+    # 类属性声明，用于IDE代码补全和默认配置
+    IP: str = '127.0.0.1'
+    PORT: int = 8000
+    INITIAL: bool = False
+    RENDER: int = 0
+    red_num: int = 1
+    blue_num: int = 1
+    state_size: int = 20
+    action_size: int = 4
+    scenes: int = 3
+    mode: str = 'train'
+    step_num_max: int = 300
+    excute_path: str = r'C:\Users\Absol\Desktop\ZK\ZK_v2.6\build\windows\ZK.exe'
+    
     reset_data_example = {
         'red': {
             'red_0': {
@@ -90,54 +104,33 @@ class Base_env(base_class):
                 "ic/roc-fpm": 0, "ic/psi-true-deg": 0},
         }}
 
-    IP = '127.0.0.1'
-    PORT = 8000
-    INITIAL = False
-    RENDER = 0
-
     def __init__(self, config=None, render=0):
         """
         :param config: 从RLlib中传输过来的参数，在这个config里面可以传递希望定制的环境变量，譬如ip，render等
-        :param ip:     开启软件的ip地址
-        :param port:   开启软件的端口号，注意端口号应该是四位的
         :param render: 是否可视化
-        :param excute_path: 主要是根据软件位置的不同
         """
-        # 默认配置参数
-        default_config = {
-            'ip': '127.0.0.1',
-            'port': 8000,
-            'red_num': 1,
-            'blue_num': 1,
-            'state_size': 20,
-            'action_size': 4,
-            'scenes': 3,
-            'mode': 'train',
-            'step_num_max': 300,
-            'excute_path': r'C:\Users\Absol\Desktop\ZK\ZK_v2.6\build\windows\ZK.exe',
-            'render': render
-        }
-
         # 更新配置参数
         if config is not None:
-            # 使用字典的get方法更新配置，如果config中没有对应的键，则使用默认值
-            for key in default_config:
-                default_config[key] = config.get(key, default_config[key])
-            
             # 处理worker_index
             try:
-                default_config['port'] += config.worker_index
+                config['port'] = config.get('port', self.PORT) + config.worker_index
             except:
                 pass
-
-        # 将配置参数赋值给实例变量
-        for key, value in default_config.items():
-            setattr(self, key.upper() if key in ['ip', 'port', 'render'] else key, value)
-
+            
+            # 更新类属性，注意未在75-87中声明的类属性将忽略
+            for key, value in config.items():
+                if hasattr(self, key.upper() if key in ['ip', 'port', 'render'] else key):
+                    setattr(self, key.upper() if key in ['ip', 'port', 'render'] else key, value)
+        
+        # 更新render参数
+        self.RENDER = render
+        
         # 初始化其他变量
         self.data = None  # 用于调试
         self.INITIAL = False
         self.obs_tot = None
+        self.observation_space = gym.spaces.Box(low=-10, high=10, shape=(self.state_size,))
+        self.action_space = gym.spaces.Box(low=-1, high=1, shape=(self.action_size,))
 
         # 创建环境实体
         self.create_entity()
@@ -389,7 +382,7 @@ class Base_env(base_class):
             self.w_list.append(w)
             self.obs_list_episode.append(obs_list)
 
-        return np.concatenate([obs_list, self.last_action]), reward, done, completion_degree
+        return np.concatenate([obs_list, self.last_action]), reward, done, info
 
     def change_target(self, h_setpoint, psi_setpoint):
         if self.mode == 'test':

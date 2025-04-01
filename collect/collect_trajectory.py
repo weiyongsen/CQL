@@ -75,7 +75,7 @@ if __name__ == '__main__':
     ray.init()  # 初始化Ray，分配CPU资源
     
     is_collect = True  # 是否收集数据
-    total_collect_num = 10  # 要收集的总轨迹数
+    total_collect_num = 1000  # 要收集的总轨迹数
     save_path = 'sample_save_folder'  # 数据保存路径
 
     args = param.parser.parse_args()
@@ -139,6 +139,7 @@ if __name__ == '__main__':
             collect_num += 1
         
         begin = time.time()
+        end = begin
         # 主循环：收集轨迹直到达到目标数量
         while truelly_collect_num < total_collect_num:
             # 等待任意一个任务完成

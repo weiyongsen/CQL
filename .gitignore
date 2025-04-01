@@ -1,8 +1,5 @@
-/data_collect
-/collect_csv
-/save_model
-/sample_save_folder
-/sample_policy
 /.idea
+/save_model
+/sample_policy
 /collect/sample_save_folder/
-/collect/csv/
+/exam/data_collect
