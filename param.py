@@ -3,6 +3,7 @@ import os
 # 定义全局变量
 train_path = os.path.join(os.getcwd(), "checkpoints", "F_test_555_1560")
 parser = argparse.ArgumentParser()
+stack_num = 2
 
 ######################### 分割线 ##########################
 parser.add_argument('--env_config', default=
@@ -13,12 +14,14 @@ parser.add_argument('--env_config', default=
                         'ip': '127.0.0.1',
                         'port': 8080,
                         'mode': 'train',
+                        'state_stack_num': stack_num,
                         'excute_path': r'D:\Desktop\project_competition\platform\MM\windows\ZK.exe',
                         'step_num_max': 300
                     }, type=dict)
 
 
 parser.add_argument('--state_size', default=20, type=int)
+parser.add_argument('--state_stack_num', default=stack_num, type=int, help='状态堆叠帧数，决定输入网络的状态维度')
 parser.add_argument('--action_size', default=4, type=int)
 # PPO更新过程参数
 parser.add_argument('--optimization_epochs', default=5, type=int)

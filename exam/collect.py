@@ -20,7 +20,7 @@ if __name__ == "__main__":
     prep = get_preprocessor(env.observation_space)(env.observation_space)
     print("The preprocessor is", prep)
 
-    for eps_id in range(10):
+    for eps_id in range(100):
         obs = env.reset()
         prev_action = np.zeros_like(env.action_space.sample())
         prev_reward = 0

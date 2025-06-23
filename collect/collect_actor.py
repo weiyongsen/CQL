@@ -35,7 +35,9 @@ class CollectActor():
         self.batch_builder_singleagent = SampleBatchBuilder()  # 用于构建轨迹批次
         self.env = Base_env(env_config)  # 创建环境实例
         self.mode = env_config['mode']
-        self.actor = Actor(env_config['state_size'], env_config['action_size'])  # 创建Actor网络
+        # 创建网络并移动到CPU
+        self.device = torch.device("cpu")
+        self.actor = Actor(env_config['state_size'] * env_config['state_stack_num'], env_config['action_size']).to(self.device)  # 创建Actor网络
         # 加载预训练策略
         if sample_policy_path is not None:
             self.actor.load_state_dict(torch.load(sample_policy_path))
@@ -50,8 +52,8 @@ class CollectActor():
             int: Actor的ID
         """
         # 重置环境，设置初始状态
-        obs = self.env.reset(h_initial=5000, h_setpoint=8000, psi_initial=90,
-                           psi_setpoint=200, v_initial=500, v_setpoint=600)
+        obs = self.env.reset(h_initial=9000, h_setpoint=10000, psi_initial=180,
+                           psi_setpoint=280, v_initial=1000, v_setpoint=1200)
         prev_action = np.zeros(4)  # 初始化前一个动作
         prev_reward = 0  # 初始化前一个奖励
         reward_total = 0  # 累计奖励
@@ -60,7 +62,11 @@ class CollectActor():
 
         while not done:
             # 使用Actor网络选择动作
-            action, action_log_prob = self.actor.sample_action(obs)
+            with torch.no_grad():
+                state_tensor = torch.FloatTensor(obs).to(self.device)
+                action_tensor, action_log_prob_tensor = self.actor.sample_action(state_tensor)
+                action = action_tensor.cpu().numpy()
+                action_log_prob = action_log_prob_tensor.cpu().item()
             # 与环境交互
             new_obs, reward, done, info = self.env.step(action)
 
@@ -73,14 +79,9 @@ class CollectActor():
                     eps_id=eps_id,
                     obs=obs,
                     actions=action,
-                    action_prob=action_prob,  # 用于CQL的重要性采样
-                    action_logp=action_log_prob,
                     rewards=reward,
-                    prev_actions=prev_action,
-                    prev_rewards=prev_reward,
                     dones=done,
-                    infos=info,
-                    new_obs=obs,
+                    new_obs=new_obs,
                 )
             # 更新状态
             obs = new_obs
@@ -103,7 +104,7 @@ if __name__ == '__main__':
     import json
     from ray.rllib.offline.json_writer import JsonWriter
     ray.init(local_mode=True)  # 本地模式初始化Ray
-    writer = JsonWriter("D:\Desktop\CQL\collect\csv", max_file_size=500 * 1024 * 1024)
+    writer = JsonWriter("D:\Desktop\CQL\collect\sample_save_folder\collect_actor_test", max_file_size=500 * 1024 * 1024)
     # 创建测试Actor
     actor = CollectActor.remote(agent_id=0,
                               env_config={
@@ -115,11 +116,12 @@ if __name__ == '__main__':
                                   'ip': '127.0.0.1',
                                   'port': 8080,
                                   'mode': 'collect',
+                                  'state_stack_num': 2,
                                   'excute_path': r'D:\Desktop\project_competition\platform\MM\windows\ZK.exe',
                                   'step_num_max': 300,
                               },
                               is_collect=True,
-                              sample_policy_path=r'D:\Desktop\CQL\sample_policy\model_train_0321_210028\actor30000_154.5482')
+                              sample_policy_path=r'D:\Desktop\CQL\sample_policy\model_train_0518_192803\actor40000_184.7115')
     # 收集一条轨迹
     results, agent_id = ray.get(actor.collect_one_episode.remote(0))
 

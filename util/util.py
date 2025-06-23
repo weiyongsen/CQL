@@ -23,31 +23,28 @@ def angle_difference(current_angle, target_angle):
 
 # 将action的list转为dict形式
 def action_ltod(action_list, mode=0):  # mode=0 代表使用动作指令控制，2是内置控制器
+    if mode == 0:
     # 设置为不使用武器 副翼、升降舵、方向舵、油门
-    action_dict = {
-        'red':
-            {'red_0': {'mode': mode, "fcs/aileron-cmd-norm": action_list[0],
-                       "fcs/elevator-cmd-norm": action_list[1],
-                       "fcs/rudder-cmd-norm": action_list[2], "fcs/throttle-cmd-norm": action_list[3],
-                       "fcs/weapon-launch": 0, "change-target": 99,
-                       "switch-missile": 0,
-                       },
-             },
-        'blue':
-            {'blue_0': {'mode': mode, "fcs/aileron-cmd-norm": 0,
-                        "fcs/elevator-cmd-norm": 0,
-                        "fcs/rudder-cmd-norm": 0, "fcs/throttle-cmd-norm": 0,
+        action_dict = {
+            'red':
+                {'red_0': {'mode': mode, "fcs/aileron-cmd-norm": action_list[0],
+                        "fcs/elevator-cmd-norm": action_list[1],
+                        "fcs/rudder-cmd-norm": action_list[2], "fcs/throttle-cmd-norm": action_list[3],
                         "fcs/weapon-launch": 0, "change-target": 99,
                         "switch-missile": 0,
                         },
-             }
-    }
-
-    return action_dict
-
-
-def action_ltod_mode2(action_list):  # mode=0 代表使用动作指令控制，2是内置控制器
-    action_dict = {
+                },
+            'blue':
+                {'blue_0': {'mode': mode, "fcs/aileron-cmd-norm": 0,
+                            "fcs/elevator-cmd-norm": 0,
+                            "fcs/rudder-cmd-norm": 0, "fcs/throttle-cmd-norm": 0,
+                            "fcs/weapon-launch": 0, "change-target": 99,
+                            "switch-missile": 0,
+                            },
+                }
+        }
+    if mode == 2:
+        action_dict = {
         'red':
             {'red_0': {'mode': 2,
                        'target_altitude_ft': action_list[0],
@@ -65,7 +62,7 @@ def action_ltod_mode2(action_list):  # mode=0 代表使用动作指令控制，2
                         "switch-missile": 0,
                         },
              }
-    }
+        }
 
     return action_dict
 
@@ -77,67 +74,41 @@ def linear_scale(value, min_val, max_val):
 
 def sqrt_scale(value, scale_factor=500):
     """非线性归一化（平方根缩放）"""
-    return 10 * np.sign(value) * np.sqrt(abs(value)) / np.sqrt(scale_factor)
+    return np.sign(value) * np.sqrt(abs(value)) / np.sqrt(scale_factor)
 
 
 # 将obs的dict转为list形式
 def obs_process(obs_list):
     # 创建一个obs_list的副本
     processed_obs_list = np.array(obs_list)
-    # 在副本上进行操作
-    # 非线性归一化（sqrt_scale）：高度差、航向差、速度差等
-    # processed_obs_list[0] = linear_scale(processed_obs_list[0], -2500, 2500)  # 高度差
-    # processed_obs_list[1] = linear_scale(processed_obs_list[1], -100, 100)  # 航向差180
-    # processed_obs_list[2] = linear_scale(processed_obs_list[2], -400, 400)  # 速度差
-    # # 线性归一化：俯仰角、翻滚角、侧滑角
-    # processed_obs_list[3] = linear_scale(processed_obs_list[3], -math.pi / 2, math.pi / 2)  # 俯仰角
-    # processed_obs_list[4] = linear_scale(processed_obs_list[4], -math.pi, math.pi)  # 翻滚角
-    # processed_obs_list[5] = linear_scale(processed_obs_list[5], -180, 180)  # 侧滑角
-    # # 速度（u, v, w）线性归一化
-    # processed_obs_list[6] = linear_scale(processed_obs_list[6], -400,400)  # u
-    # processed_obs_list[7] = linear_scale(processed_obs_list[7], -100, 100)  # v
-    # processed_obs_list[8] = linear_scale(processed_obs_list[8], -100, 100)  # w
-    # # 角速度（pqr）线性归一化
-    # processed_obs_list[9] = linear_scale(processed_obs_list[9],  -math.pi / 5, math.pi / 5)  # p
-    # processed_obs_list[10] = linear_scale(processed_obs_list[10],  -math.pi / 5, math.pi / 5)  # q
-    # processed_obs_list[11] = linear_scale(processed_obs_list[11],  -math.pi / 5, math.pi / 5)  # r
-
-    processed_obs_list[0] = linear_scale(processed_obs_list[0], -1000, 1000)  # 高度差
-    processed_obs_list[1] = linear_scale(processed_obs_list[1], -50, 50)  # 航向差180
-    processed_obs_list[2] = linear_scale(processed_obs_list[2], -200, 200)  # 速度差
+    
+    # 使用非线性归一化处理高度差、航向差、速度差
+    # processed_obs_list[0] = linear_scale(processed_obs_list[0], -1000, 1000)  # 高度差
+    # processed_obs_list[1] = linear_scale(processed_obs_list[1], -50, 50)  # 航向差180
+    # processed_obs_list[2] = linear_scale(processed_obs_list[2], -200, 200)  # 速度差
+    processed_obs_list[0] = sqrt_scale(processed_obs_list[0], scale_factor=400)  # 高度差
+    processed_obs_list[1] = sqrt_scale(processed_obs_list[1], scale_factor=10)    # 航向差
+    processed_obs_list[2] = sqrt_scale(processed_obs_list[2], scale_factor=40)   # 速度差
+    
     # 线性归一化：俯仰角、翻滚角、侧滑角
-    processed_obs_list[3] = linear_scale(processed_obs_list[3], -math.pi / 4, math.pi / 4)  # 俯仰角
-    processed_obs_list[4] = linear_scale(processed_obs_list[4], -math.pi / 2, math.pi / 2)  # 翻滚角
-    processed_obs_list[5] = linear_scale(processed_obs_list[5], -100, 100)  # 侧滑角
+    processed_obs_list[3] = linear_scale(processed_obs_list[3], -math.pi/4, math.pi/4)  # 俯仰角
+    processed_obs_list[4] = linear_scale(processed_obs_list[4], -math.pi/2, math.pi/2)  # 翻滚角
+    processed_obs_list[5] = linear_scale(processed_obs_list[5], -100, 100)              # 侧滑角
+    
     # 速度（u, v, w）线性归一化
-    processed_obs_list[6] = linear_scale(processed_obs_list[6], -400, 400)  # u
-    processed_obs_list[7] = linear_scale(processed_obs_list[7], -50, 50)  # v
-    processed_obs_list[8] = linear_scale(processed_obs_list[8], -50, 50)  # w
+    processed_obs_list[6] = linear_scale(processed_obs_list[6], -500, 500)  # u
+    processed_obs_list[7] = linear_scale(processed_obs_list[7], -50, 50)    # v
+    processed_obs_list[8] = linear_scale(processed_obs_list[8], -50, 50)    # w
+    
     # 角速度（pqr）线性归一化
-    processed_obs_list[9] = linear_scale(processed_obs_list[9], -math.pi / 10, math.pi / 10)  # p
-    processed_obs_list[10] = linear_scale(processed_obs_list[10], -math.pi / 10, math.pi / 10)  # q
-    processed_obs_list[11] = linear_scale(processed_obs_list[11], -math.pi / 10, math.pi / 10)  # r
-
-    # 油门[0,2]
-    processed_obs_list[15] /= 2
-
+    processed_obs_list[9] = linear_scale(processed_obs_list[9], -math.pi/8, math.pi/8)  # p
+    processed_obs_list[10] = linear_scale(processed_obs_list[10], -math.pi/8, math.pi/8) # q
+    processed_obs_list[11] = linear_scale(processed_obs_list[11], -math.pi/8, math.pi/8) # r
+    
+    # 控制面位置归一化
+    processed_obs_list[15] = linear_scale(processed_obs_list[15], 0, 2)   # 油门
+    
     return np.clip(processed_obs_list, -5, 5)
-
-    # processed_obs_list[0] = linear_scale(processed_obs_list[0], -5000, 5000)  # 高度差
-    # processed_obs_list[1] = linear_scale(processed_obs_list[1], -150, 150)  # 航向差180
-    # # 线性归一化：俯仰角、翻滚角、侧滑角
-    # processed_obs_list[2] = linear_scale(processed_obs_list[2], -math.pi / 2, math.pi / 2)  # 俯仰角
-    # processed_obs_list[3] = linear_scale(processed_obs_list[3], -math.pi, math.pi)  # 翻滚角
-    # processed_obs_list[4] = linear_scale(processed_obs_list[4], -180, 180)  # 侧滑角
-    # # 速度（u, v, w）线性归一化
-    # processed_obs_list[5] = linear_scale(processed_obs_list[5], -1000, 1000)  # u
-    # processed_obs_list[6] = linear_scale(processed_obs_list[6], -200, 200)  # v
-    # processed_obs_list[7] = linear_scale(processed_obs_list[7], -200, 200)  # w
-    # # 角速度（pqr）线性归一化
-    # processed_obs_list[8] = linear_scale(processed_obs_list[8], -math.pi, math.pi)  # p
-    # processed_obs_list[9] = linear_scale(processed_obs_list[9], -math.pi / 5, math.pi / 5)  # q
-    # processed_obs_list[10] = linear_scale(processed_obs_list[10], -math.pi / 5, math.pi / 5)  # r
-
 
 
 def clamp_list(input_list, min_value, max_value):
@@ -222,3 +193,10 @@ def func_coef(index, a=1, b=22.12586, c=0.00054, d=-0.035):
     index = index / 2
     coef = (a / (1 + b * np.exp(-c * index)) + d) / 0.9
     return min(coef, 1)
+
+def func_coef_piecewise(index, max_step=10000):
+    # 前期线性，后期保持
+    if index < max_step:
+        return min(index / max_step, 1)
+    else:
+        return 1.0

@@ -71,14 +71,15 @@ def exit():
 
 if __name__ == '__main__':
     # 配置参数
-    num_workers = 4  # 并行收集的worker数量
+    num_workers = 5  # 并行收集的worker数量
     ray.init()  # 初始化Ray，分配CPU资源
     
     is_collect = True  # 是否收集数据
-    total_collect_num = 1000  # 要收集的总轨迹数
+    total_collect_num = 500  # 要收集的总轨迹数
     save_path = 'sample_save_folder'  # 数据保存路径
 
     args = param.parser.parse_args()
+    env_config = args.env_config
     policy_name = 'PPO'  # 使用的策略名称
 
     # 创建保存目录
@@ -96,7 +97,7 @@ if __name__ == '__main__':
     reward = 0  # 总奖励
     step = 0  # 总步数
     
-    policy_path = r'D:\Desktop\CQL\sample_policy\model_train_0321_210028\actor30000_154.5482'
+    policy_path = r'D:\Desktop\CQL\sample_policy\model_train_0518_192803\actor40000_184.7115'
     results = []  # 存储测试结果
     
     # 端口配置
@@ -118,16 +119,17 @@ if __name__ == '__main__':
         actor_list = [CollectActor.remote(
             agent_id=i,
             env_config={
-                'red_num': 1,
-                'blue_num': 1,
-                'state_size': 20,
-                'action_size': 4,
-                'render': 0,
-                'ip': '127.0.0.1',
+                'red_num': env_config['red_num'],
+                'blue_num': env_config['blue_num'],
+                'state_size': args.state_size,
+                'action_size': args.action_size,
+                'render': env_config['render'],
+                'ip': env_config['ip'],
                 'port': port_base + i,  # 为每个worker分配不同的端口
                 'mode': 'collect',
+                'state_stack_num': env_config['state_stack_num'],
                 'excute_path': get_executable_path(),
-                'step_num_max': 300,
+                'step_num_max': env_config['step_num_max'],
             },
             is_collect=is_collect,
             sample_policy_path=policy_path) for i in range(num_workers)]
